@@ -3,7 +3,7 @@ package domain
 import "time"
 
 type OrderItem struct {
-	ProductCode string `json:"product_code"`
+	ProductCode string  `json:"product_code"`
 	UnitPrice   float32 `json:"unit_price"`
 	Quantity    float32 `json:"quantity"`
 }
