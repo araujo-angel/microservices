@@ -10,7 +10,6 @@ Este projeto utiliza **Arquitetura Hexagonal (Ports and Adapters)**, proporciona
 - Comunicação entre microserviços via gRPC
 - Facilidade para testes e manutenção
 
-![Arquitetura](diagrama.png)
 
 ### Estrutura
 
@@ -54,14 +53,13 @@ Execute os comandos em **4 terminais diferentes** na ordem indicada:
 
 #### **Terminal 1: MySQL**
 ```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices
 docker run -p 3307:3306 -e MYSQL_ROOT_PASSWORD=minhasenha -v "$PWD\init.sql:/docker-entrypoint-initdb.d/init.sql" mysql
 ```
 Aguarde até ver a mensagem: `ready for connections`
 
 #### **Terminal 2: Payment Service**
 ```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices\payment
+cd [...] microservices\payment
 $env:DATA_SOURCE_URL="root:minhasenha@tcp(127.0.0.1:3307)/payment"
 $env:APPLICATION_PORT="3001"
 $env:ENV="development"
@@ -71,7 +69,7 @@ Aguarde até ver: `starting payment service on port 3001 ...`
 
 #### **Terminal 3: Order Service**
 ```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices\order
+cd [...] microservices\order
 $env:DATA_SOURCE_URL="root:minhasenha@tcp(127.0.0.1:3307)/order"
 $env:APPLICATION_PORT="3000"
 $env:PAYMENT_SERVICE_URL="localhost:3001"
