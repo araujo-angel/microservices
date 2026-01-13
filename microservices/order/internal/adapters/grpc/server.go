@@ -12,7 +12,9 @@ import (
 	"github.com/araujo-angel/microservices/order/internal/application/core/domain"
 	"github.com/araujo-angel/microservices/order/internal/ports"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 func (a Adapter) Create(ctx context.Context, request *order.CreateOrderRequest) (*order.CreateOrderResponse, error) {
@@ -26,8 +28,11 @@ func (a Adapter) Create(ctx context.Context, request *order.CreateOrderRequest) 
 	}
 	newOrder := domain.NewOrder(int64(request.CostumerId), orderItems)
 	result, err := a.api.PlaceOrder(newOrder)
-	if err != nil {
+	code := status.Code(err)
+	if code == codes.InvalidArgument {
 		return nil, err
+	} else if err != nil {
+		return nil, status.New(codes.Internal, fmt.Sprintf("failed to place order. %v", err)).Err()
 	}
 	return &order.CreateOrderResponse{OrderId: int32(result.ID)}, nil
 }
