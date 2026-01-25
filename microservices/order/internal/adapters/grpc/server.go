@@ -27,14 +27,14 @@ func (a Adapter) Create(ctx context.Context, request *order.CreateOrderRequest) 
 		})
 	}
 	newOrder := domain.NewOrder(int64(request.CostumerId), orderItems)
-	result, err := a.api.PlaceOrder(newOrder)
+	result, deliveryDays, err := a.api.PlaceOrder(newOrder)
 	code := status.Code(err)
-	if code == codes.InvalidArgument {
+	if code == codes.InvalidArgument || code == codes.NotFound {
 		return nil, err
 	} else if err != nil {
 		return nil, status.New(codes.Internal, fmt.Sprintf("failed to place order. %v", err)).Err()
 	}
-	return &order.CreateOrderResponse{OrderId: int32(result.ID)}, nil
+	return &order.CreateOrderResponse{OrderId: int32(result.ID), DeliveryDays: deliveryDays}, nil
 }
 
 type Adapter struct {

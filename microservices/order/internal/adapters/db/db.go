@@ -14,12 +14,20 @@ type Order struct {
 	Status     string
 	OrderItems []OrderItem
 }
+
 type OrderItem struct {
 	gorm.Model
 	ProductCode string
 	UnitPrice   float32
 	Quantity    float32
 	OrderId     uint
+}
+
+type StockItem struct {
+	gorm.Model
+	ProductCode string `gorm:"type:varchar(255);uniqueIndex"`
+	Name        string
+	Quantity    int32
 }
 type Adapter struct {
 	db *gorm.DB
@@ -30,7 +38,7 @@ func NewAdapter(dataSourceUrl string) (*Adapter, error) {
 	if openErr != nil {
 		return nil, fmt.Errorf("db connection error: %v", openErr)
 	}
-	err := db.AutoMigrate(&Order{}, &OrderItem{})
+	err := db.AutoMigrate(&Order{}, &OrderItem{}, &StockItem{})
 	if err != nil {
 		return nil, fmt.Errorf("db migration error: %v", err)
 	}
@@ -77,4 +85,18 @@ func (a *Adapter) Save(order *domain.Order) error {
 		order.ID = int64(orderModel.ID)
 	}
 	return res.Error
+}
+
+func (a *Adapter) GetStockItemByProductCode(productCode string) (domain.StockItem, error) {
+	var stockItem StockItem
+	res := a.db.Where("product_code = ?", productCode).First(&stockItem)
+	if res.Error != nil {
+		return domain.StockItem{}, res.Error
+	}
+	return domain.StockItem{
+		ID:          int64(stockItem.ID),
+		ProductCode: stockItem.ProductCode,
+		Name:        stockItem.Name,
+		Quantity:    stockItem.Quantity,
+	}, nil
 }

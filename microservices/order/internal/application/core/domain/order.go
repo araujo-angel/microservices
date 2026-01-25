@@ -8,6 +8,13 @@ type OrderItem struct {
 	Quantity    float32 `json:"quantity"`
 }
 
+type StockItem struct {
+	ID          int64  `json:"id"`
+	ProductCode string `json:"product_code"`
+	Name        string `json:"name"`
+	Quantity    int32  `json:"quantity"`
+}
+
 type Order struct {
 	ID         int64       `json:"id"`
 	CustomerID int64       `json:"customer_id"`

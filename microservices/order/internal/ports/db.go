@@ -7,4 +7,5 @@ import (
 type DBPort interface {
 	Get(id string) (domain.Order, error)
 	Save(*domain.Order) error
+	GetStockItemByProductCode(productCode string) (domain.StockItem, error)
 }
