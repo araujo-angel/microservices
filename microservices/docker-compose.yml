@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: s3cr3t
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ps3cr3t"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  payment:
+    build:
+      context: ./payment
+      dockerfile: Dockerfile
+    container_name: payment
+    environment:
+      - ENV=development
+      - APPLICATION_PORT=8081
+      - DATA_SOURCE_URL=root:s3cr3t@tcp(mysql:3306)/payment?charset=utf8mb4&parseTime=True&loc=Local
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  shipping:
+    build:
+      context: ./shipping
+      dockerfile: Dockerfile
+    container_name: shipping
+    environment:
+      - ENV=development
+      - APPLICATION_PORT=8082
+    ports:
+      - "8082:8082"
+
+  order:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: order
+    environment:
+      - ENV=development
+      - APPLICATION_PORT=8080
+      - DATA_SOURCE_URL=root:s3cr3t@tcp(mysql:3306)/order?charset=utf8mb4&parseTime=True&loc=Local
+      - PAYMENT_SERVICE_URL=payment:8081
+      - SHIPPING_SERVICE_URL=shipping:8082
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      payment:
+        condition: service_started
+      shipping:
+        condition: service_started
+
+volumes:
+  mysql_data:

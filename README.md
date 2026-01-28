@@ -15,28 +15,32 @@ Este projeto utiliza **Arquitetura Hexagonal (Ports and Adapters)**, proporciona
 
 ```
 microservices/
-├── order/                 # Microserviço de Pedidos
-│   ├── cmd/              # Ponto de entrada
-│   ├── internal/
-│   │   ├── adapters/     # Implementações (gRPC, DB, Payment Client, Shipping Client)
-│   │   ├── application/  # Lógica de negócio
-│   │   └── ports/        # Interfaces
-│   └── config/           # Configurações
-├── payment/              # Microserviço de Pagamentos
-│   ├── cmd/              # Ponto de entrada
-│   ├── internal/
-│   │   ├── adapters/     # Implementações (gRPC, DB)
-│   │   ├── application/  # Lógica de negócio
-│   │   └── ports/        # Interfaces
-│   └── config/           # Configurações
-├── shipping/             # Microserviço de Entregas
-│   ├── cmd/              # Ponto de entrada
-│   ├── internal/
-│   │   ├── adapters/     # Implementações (gRPC)
-│   │   ├── application/  # Lógica de negócio
-│   │   └── ports/        # Interfaces
-│   └── config/           # Configurações
-└── init.sql              # Script de inicialização dos bancos
+├── docker-compose.yml        # Orquestração dos containers
+├── init.sql                  # Script de inicialização dos bancos
+├── order/                    # Microserviço de Pedidos
+│   ├── Dockerfile
+│   ├── cmd/                  # Ponto de entrada
+│   ├── config/               # Configurações
+│   └── internal/
+│       ├── adapters/         # Implementações (gRPC, DB, REST, Payment Client, Shipping Client)
+│       ├── application/      
+│       └── ports/            
+├── payment/                  # Microserviço de Pagamentos
+│   ├── Dockerfile
+│   ├── cmd/                  
+│   ├── config/               
+│   └── internal/
+│       ├── adapters/         # Implementações (gRPC, DB)
+│       ├── application/      
+│       └── ports/           
+└── shipping/                 # Microserviço de Entregas
+    ├── Dockerfile
+    ├── cmd/                  
+    ├── config/               
+    └── internal/
+        ├── adapters/         # Implementações (gRPC)
+        ├── application/      
+        └── ports/            
 ```
 
 ## Tecnologias
@@ -47,58 +51,27 @@ microservices/
 - **MySQL** - Banco de dados relacional
 - **Protocol Buffers** - Definidos em [microservices-proto](https://github.com/araujo-angel/microservices-proto)
 
+> **Nota sobre Docker:** Os `go.mod` usam `replace` com caminhos locais para os arquivos proto. Como o contexto do Docker é isolado, os Dockerfiles clonam o repositório proto durante o build para satisfazer essas dependências.
+
 ## Como Executar
 
 ### Pré-requisitos
 - Docker
-- Go 1.25+
+- Docker Compose
 - grpcurl (para testes)
 
-### Passos (Windows PowerShell)
+### Passos
 
-Execute os comandos em **5 terminais diferentes** na ordem indicada:
-
-#### **Terminal 1: MySQL**
+#### **1. Subir todos os serviços**
 ```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices
-docker run -p 3307:3306 -e MYSQL_ROOT_PASSWORD=minhasenha -v "${PWD}/init.sql:/docker-entrypoint-initdb.d/init.sql" mysql
+cd microservices\microservices
+docker-compose up --build
 ```
-Aguarde até ver a mensagem: `ready for connections`
+Aguarde até que todos os serviços estejam prontos.
 
-#### **Terminal 2: Payment Service**
+#### **2. Teste com grpcurl**
 ```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices\payment
-$env:DATA_SOURCE_URL="root:minhasenha@tcp(127.0.0.1:3307)/payment?parseTime=true"
-$env:APPLICATION_PORT="3001"
-$env:ENV="development"
-go run cmd/main.go
-```
-Aguarde até ver: `starting payment service on port 3001 ...`
-
-#### **Terminal 3: Shipping Service**
-```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices\shipping
-$env:APPLICATION_PORT="3002"
-$env:ENV="development"
-go run cmd/main.go
-```
-Aguarde até ver: `Starting shipping service...`
-
-#### **Terminal 4: Order Service**
-```powershell
-cd C:\Users\Angelica\Documents\GitHub\microservices\microservices\order
-$env:DATA_SOURCE_URL="root:minhasenha@tcp(127.0.0.1:3307)/order?parseTime=true"
-$env:APPLICATION_PORT="3000"
-$env:PAYMENT_SERVICE_URL="localhost:3001"
-$env:SHIPPING_SERVICE_URL="localhost:3002"
-$env:ENV="development"
-go run cmd/main.go
-```
-Aguarde até ver: `starting order service on port 3000 ...`
-
-#### **Terminal 5: Teste com grpcurl**
-```powershell
-grpcurl -d '{\"costumer_id\": 123, \"order_items\": [{\"product_code\": \"prod\", \"quantity\": 4, \"unit_price\": 12.0}]}' -plaintext localhost:3000 Order/Create
+grpcurl -d '{\"costumer_id\": 123, \"order_items\": [{\"product_code\": \"prod\", \"quantity\": 4, \"unit_price\": 12.0}]}' -plaintext localhost:8080 Order/Create
 ```
 
 **Resposta esperada:**
@@ -109,34 +82,59 @@ grpcurl -d '{\"costumer_id\": 123, \"order_items\": [{\"product_code\": \"prod\"
 }
 ```
 
+### Testes de Tolerância a Falhas
+
+O sistema possui retry automático (5 tentativas, 1s de intervalo) e timeout de 15s.
+
+#### **Teste 1: Retry com Payment indisponível**
+```powershell
+docker stop payment
+grpcurl -d '{\"costumer_id\": 123, \"order_items\": [{\"product_code\": \"prod\", \"quantity\": 4, \"unit_price\": 12.0}]}' -plaintext localhost:8080 Order/Create
+docker start payment
+```
+**Esperado:** Erro `Unavailable` após ~5 segundos (5 tentativas de retry).
+
+#### **Teste 2: Retry com Shipping indisponível**
+```powershell
+docker stop shipping
+grpcurl -d '{\"costumer_id\": 123, \"order_items\": [{\"product_code\": \"prod\", \"quantity\": 4, \"unit_price\": 12.0}]}' -plaintext localhost:8080 Order/Create
+docker start shipping
+```
+**Esperado:** Erro `Unavailable` após ~5 segundos.
+
+#### **Acompanhar logs**
+```powershell
+docker logs -f order
+```
+
 ### Variáveis de Ambiente
 
 | Serviço | Variável | Descrição |
 |---------|----------|-----------|
-| Order | `DATA_SOURCE_URL` | Conexão MySQL: `root:minhasenha@tcp(127.0.0.1:3307)/order?parseTime=true` |
-| Order | `APPLICATION_PORT` | Porta do serviço: `3000` |
-| Order | `PAYMENT_SERVICE_URL` | Endereço do Payment: `localhost:3001` |
-| Order | `SHIPPING_SERVICE_URL` | Endereço do Shipping: `localhost:3002` |
+| Order | `DATA_SOURCE_URL` | Conexão MySQL: `root:s3cr3t@tcp(mysql:3306)/order?charset=utf8mb4&parseTime=True&loc=Local` |
+| Order | `APPLICATION_PORT` | Porta do serviço: `8080` |
+| Order | `PAYMENT_SERVICE_URL` | Endereço do Payment: `payment:8081` |
+| Order | `SHIPPING_SERVICE_URL` | Endereço do Shipping: `shipping:8082` |
 | Order | `ENV` | Ambiente: `development` (habilita gRPC reflection) |
-| Payment | `DATA_SOURCE_URL` | Conexão MySQL: `root:minhasenha@tcp(127.0.0.1:3307)/payment?parseTime=true` |
-| Payment | `APPLICATION_PORT` | Porta do serviço: `3001` |
+| Payment | `DATA_SOURCE_URL` | Conexão MySQL: `root:s3cr3t@tcp(mysql:3306)/payment?charset=utf8mb4&parseTime=True&loc=Local` |
+| Payment | `APPLICATION_PORT` | Porta do serviço: `8081` |
 | Payment | `ENV` | Ambiente: `development` (habilita gRPC reflection) |
-| Shipping | `APPLICATION_PORT` | Porta do serviço: `3002` |
+| Shipping | `APPLICATION_PORT` | Porta do serviço: `8082` |
 | Shipping | `ENV` | Ambiente: `development` (habilita gRPC reflection) |
 
-> **Nota:** O parâmetro `parseTime=true` na URL de conexão MySQL é necessário para que o driver converta corretamente campos de data/hora para `time.Time` do Go.
+> **Nota:** O parâmetro `parseTime=True` na URL de conexão MySQL é necessário para que o driver converta corretamente campos de data/hora para `time.Time` do Go.
 
 ### Fluxo de Comunicação
 
 ```
 [grpcurl]
     ↓ (cria pedido)
-[Order Service :3000] ← MySQL :3307/order
+[Order Service :8080] ← MySQL :3306/order
     ├──→ (processa pagamento)
-    │    [Payment Service :3001] ← MySQL :3307/payment
+    │    [Payment Service :8081] ← MySQL :3306/payment
     │
     └──→ (calcula entrega)
-         [Shipping Service :3002]
+         [Shipping Service :8082]
 ```
 
 **IFPB - Instituto Federal da Paraíba** | Sistemas Distribuídos 2025.2
